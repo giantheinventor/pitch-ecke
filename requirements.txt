@@ -2,3 +2,6 @@ ffmpeg-python
 requests 
 qrcode[pil] 
 pyserial
+keyboard
+dotenv
+frameioclient
