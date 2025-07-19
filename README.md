@@ -11,9 +11,15 @@ You need a Vimeo account to comment on videos with review links.
 
 ## Dependencies
 - **Python 3.10+**
-- Install dependencies:
+- Install python packages:
   ```bash
   pip install -r requirements.txt
+- Install ffmpeg
+  - Mac:
+    ```bash
+    brew install ffmpeg
+  - Windows:
+    - Install from official site https://ffmpeg.org/download.html
 
 ## VIMEO API
 - Generate an API key with rights to:
