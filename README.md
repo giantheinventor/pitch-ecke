@@ -1,17 +1,40 @@
-# 🎥 Video Upload & QR-Code Generator
+# Pitch Ecke
 
-Dieses Tool nimmt ein Video auf, lädt es automatisch auf **Vimeo** hoch, aktiviert die **Review-Seite**, und erstellt einen **QR-Code**, um den Link bequem zu teilen.
+## VIMEO Account
+You need at least a standard Vimeo subscription to host videos with review links.
+You need a Vimeo account to comment on videos with review links.
 
----
+## Usage
+- python main.py to **start script**
+- `q` → **stop recording & upload**
+- wait **30 seconds**, until the review link is active.
 
-- 🖥 **Key-Bindings für Steuerung**:
-  - `q` → **Aufnahme/Upload beenden**
-  - Warte ca. **30 Sekunden**, bis der Review-Link aktiv ist  
-
----
-
-## 📦 Voraussetzungen
+## Dependencies
 - **Python 3.10+**
-- Installiere die Abhängigkeiten:
+- Install dependencies:
   ```bash
   pip install -r requirements.txt
+
+## VIMEO API
+- Generate an API key with rights to:
+  - upload
+  - edit
+  - private
+- Add the key to your .env file
+`
+VIMEO_TOKEN = "Your Token"
+`
+- Add the .env to your gitignore file
+
+
+## Projektstruktur
+```text
+├── assets/        
+├── src/
+│   ├── main.py        
+│   ├── record.py      
+│   ├── upload.py      
+│   ├── generate_qr.py 
+├── .env               
+├── requirements.txt   
+└── README.md
