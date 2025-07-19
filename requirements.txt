@@ -1,7 +1,5 @@
-ffmpeg-python 
-requests 
-qrcode[pil] 
-pyserial
+requests
+python-dotenv
+qrcode
+Pillow
 keyboard
-dotenv
-frameioclient
