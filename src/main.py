@@ -12,7 +12,12 @@ if __name__ == "__main__":
     print("started")
     os.makedirs("assets", exist_ok=True)
     print("assets")
-    start_recording(output_file)
-    video_link = upload(output_file)
-    print(f"Video-Link: {video_link}")
-    create_qr_code(video_link, show=True)
+    try:
+        while True:
+            start_recording(output_file)
+            video_link = upload(output_file)
+            print(f"Video-Link: {video_link}")
+            create_qr_code(video_link, show=True)
+            print("Bereit für die nächste Aufnahme. (Strg+C zum Beenden)")
+    except KeyboardInterrupt:
+        print("Beendet.")

@@ -54,11 +54,18 @@ def start_recording(output_file):
     # Startet die Aufnahme. Beendet Aufnahme durch input "q"
     print(f"Starte Aufnahme... ({output_file})")
     print(command)
+    # Warte auf ersten "r"-Tastendruck zum Starten
+    print("Bereit. Drücke 'r' um die Aufnahme zu STARTEN.")
+    while True:
+        key = wait_for_keypress()
+        if key.lower() == 'r':
+            print("Start.")
+            break
     process = subprocess.Popen(command, stdin=subprocess.PIPE)
     while True:
         key = wait_for_keypress()
         print(f"Taste: {key!r}")
-        if key.lower() == 'q':
+        if key.lower() == 'r':
             print("Beendet.")
             break
     process.communicate(input=b"q")
