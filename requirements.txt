@@ -2,4 +2,4 @@ requests
 python-dotenv
 qrcode
 Pillow
-keyboard
+pynput
