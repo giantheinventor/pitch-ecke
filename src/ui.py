@@ -4,7 +4,8 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import os
-import time
+
+QR_CODE_TIMER = 30
 
 def _ui_loop(q: Queue):
     root = tk.Tk()
@@ -28,7 +29,7 @@ def _ui_loop(q: Queue):
     # --- Dynamic sizing for fullscreen UI ---
     root.update_idletasks()
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    scale = max(1.0, min(sw / 1920.0, sh / 1080.0))  # base on 1080p; never below 1.0
+    scale = max(1.0, min(sw / 1920.0, sh / 1080.0)) 
     SZ = {
         "PAD": int(16 * scale),
         "TITLE": max(24, int(40 * scale)),
@@ -39,11 +40,10 @@ def _ui_loop(q: Queue):
         "LINK": max(14, int(18 * scale)),
         "SUB": max(12, int(16 * scale)),
     }
-
-    # --- Nicer ttk progressbar style ---
+    # Progressbar
     style = ttk.Style()
     try:
-        style.theme_use("clam")  # supports color customization well
+        style.theme_use("clam") 
     except Exception:
         pass
     SZ["PB_THICK"] = max(12, int(20 * scale))
@@ -82,7 +82,7 @@ def _ui_loop(q: Queue):
     pb = ttk.Progressbar(root, mode="indeterminate", length=SZ["PB_LEN"], style="MU.Horizontal.TProgressbar")
     pb.pack(pady=SZ["PAD"] // 2)
     pb.stop()
-    pb.pack_forget()  # verstecken bis gebraucht
+    pb.pack_forget()  
 
     # QR image + link
     qr_label = tk.Label(root, bg="#111111")
@@ -92,8 +92,40 @@ def _ui_loop(q: Queue):
     link_lbl.pack()
     link_lbl.bind("<Button-1>", lambda e: root.clipboard_clear() or root.clipboard_append(link_var.get()))
 
-    qr_img_ref = {"img": None}  # damit Tk das Image nicht weg-GCed
+    qr_img_ref = {"img": None} 
 
+    # Countdown label (hidden by default)
+    countdown_var = tk.StringVar(value="")
+    countdown_lbl = tk.Label(
+        root,
+        textvariable=countdown_var,
+        fg="#FFFFFF",
+        bg="#111111",
+        font=("Helvetica", SZ["TITLE"] * 2, "bold"),
+    )
+    countdown_lbl.pack(pady=SZ["PAD"])
+    countdown_lbl.pack_forget()    
+
+    def start_countdown(seconds: int, qr_path: str | None, link: str | None):
+
+        set_uploading(False)
+        set_status("idle")
+
+        remaining = max(0, int(seconds))
+
+        def tick():
+            nonlocal remaining
+            if remaining > 0:
+                countdown_lbl.pack(pady=SZ["PAD"])
+                countdown_var.set(remaining)
+                remaining -= 1
+                root.after(1000, tick)
+            else:
+                countdown_lbl.pack_forget()
+                show_qr(qr_path, link)
+
+        tick()
+    
     def set_status(state: str):
         if state == "recording":
             dot.itemconfig(dot_id, fill="#EA4335")
@@ -115,7 +147,6 @@ def _ui_loop(q: Queue):
             upload_var.set("")
 
     def show_qr(qr_path: str | None, link: str | None):
-        # Bild (falls vorhanden)
         if qr_path and os.path.exists(qr_path):
             try:
                 im = Image.open(qr_path).resize((SZ["QR"], SZ["QR"]))
@@ -125,7 +156,6 @@ def _ui_loop(q: Queue):
                 qr_label.config(image="", text="QR konnte nicht geladen werden", fg="#CCCCCC")
         else:
             qr_label.config(image="", text="", fg="#CCCCCC")
-        # Link anzeigen
         link_var.set(link or "")
 
     def poll_queue():
@@ -135,14 +165,14 @@ def _ui_loop(q: Queue):
                 etype = evt.get("type")
                 if etype == "recording":
                     set_status("recording" if evt.get("on") else "idle")
-                    # beim Start/Stop QR ausblenden
                     if evt.get("on"):
                         show_qr(None, None)
                 elif etype == "uploading":
                     set_uploading(bool(evt.get("on")))
-                    set_status("uploading" if evt.get("on") else "idle")                    
+                    set_status("uploading" if evt.get("on") else "idle")   
+                elif etype == "countdown":
+                    start_countdown(QR_CODE_TIMER, evt.get("qr_path"), evt.get("link")) 
                 elif etype == "uploaded":
-                    # { "link": ..., "qr_path": ... }
                     set_uploading(False)
                     show_qr(evt.get("qr_path"), evt.get("link"))
                 elif etype == "message":
@@ -155,10 +185,6 @@ def _ui_loop(q: Queue):
     root.mainloop()
 
 def start_ui() -> Queue:
-    """
-    Startet die UI in einem separaten Prozess und gibt die Queue zurück.
-    Sende Events mit: q.put({...})
-    """
     q = Queue()
     p = Process(target=_ui_loop, args=(q,), daemon=True)
     p.start()

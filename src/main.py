@@ -1,4 +1,5 @@
 import os
+import time
 from generate_qr import create_qr_code
 from upload import upload
 from record import start_recording, stop_recording
@@ -37,12 +38,12 @@ if __name__ == "__main__":
         recording["on"] = False
         uiq.put({"type": "uploading", "on": True})
         video_link = upload(output_file)
-        print(f"Video-Link: {video_link}")
         create_qr_code(video_link)
         qr_path = os.path.join(assets_dir, "qr_code.png")
-        uiq.put({"type": "uploaded", "link": video_link, "qr_path": qr_path})
+
+        # Upload ready show qr code
         uiq.put({"type": "uploading", "on": False})
-        print("Bereit für die nächste Aufnahme. (Hotkey: r)")
+        uiq.put({"type": "countdown", "seconds": 10, "qr_path": qr_path, "link": video_link})
 
     def on_press(key):
         try:
@@ -57,7 +58,6 @@ if __name__ == "__main__":
         elif ch == "q":
             if recording["on"]:
                 do_stop_and_upload()
-            print("Beendet.")
             return False
 
     listener = keyboard.Listener(on_press=on_press)

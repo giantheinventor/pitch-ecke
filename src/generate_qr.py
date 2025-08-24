@@ -21,4 +21,3 @@ def create_qr_code(link):
 
     img = qr.make_image(fill="black", back_color="white")
     img.save(output_file)
-    print(f"QR-Code gespeichert: {output_file}")

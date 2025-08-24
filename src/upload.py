@@ -33,7 +33,6 @@ def _delete_oldest_video() -> bool:
         return False
 
     uri = items[0]["uri"]
-    print(f"Lösche ältestes Video: {uri}")
     resp = requests.delete(f"{BASE_URL}{uri}", headers=HEADERS, timeout=30)
     if resp.status_code >= 400:
         try:
@@ -74,7 +73,6 @@ def create_upload_session(
 
 
 def activate_review_page(video_uri):
-    print("Aktiviere Review-Seite...", flush=True)
     url = f"{BASE_URL}{video_uri}"
     data = {"review_page": {"active": True}}
     r = requests.patch(url, headers=HEADERS, json=data)
@@ -147,7 +145,6 @@ def upload(video_path):
     # Try to activate review page; ignore if not permitted on this plan
     try:
         activate_review_page(video_uri)
-        print("activated review link")
     except Exception:
         print("Could not activate review link")
     return get_review_link(video_uri)
