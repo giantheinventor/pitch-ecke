@@ -1,6 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
+import time
 
 # .env laden
 load_dotenv()
@@ -15,24 +16,47 @@ HEADERS = {
 }
 
 #Speicher-Helper
-def _get_free_bytes() -> int:
-    r = requests.get(f"{BASE_URL}/me", headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    return int(r.json().get("upload_quota", {}).get("space", {}).get("free", 0))
+def _get_free_bytes(retries: int = 3, backoff: int = 5) -> int:
+    for attempt in range(retries):
+        r = requests.get(f"{BASE_URL}/me", headers=HEADERS, timeout=20)
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
+            retry_after = r.headers.get("Retry-After")
+            wait = int(retry_after) if retry_after and retry_after.isdigit() else backoff
+            print(f"Vimeo quota check rate-limited ({r.status_code}). Retry in {wait}s...")
+            time.sleep(wait)
+            backoff *= 2
+            continue
+        r.raise_for_status()
+        return int(r.json().get("upload_quota", {}).get("space", {}).get("free", 0))
+    r.raise_for_status()  # falls letzte Antwort auch Fehler war
 
 def _delete_oldest_video() -> bool:
-    r = requests.get(
-        f"{BASE_URL}/me/videos",
-        headers=HEADERS,
-        params={"sort": "date", "direction": "asc", "per_page": 1, "fields": "uri"},
-        timeout=20,
-    )
-    r.raise_for_status()
-    items = r.json().get("data", [])
+    retries, backoff = 3, 5
+    for attempt in range(retries):
+        r = requests.get(
+            f"{BASE_URL}/me/videos",
+            headers=HEADERS,
+            params={"sort": "date", "direction": "asc", "per_page": 1, "fields": "uri"},
+            timeout=20,
+        )
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
+            retry_after = r.headers.get("Retry-After")
+            wait = int(retry_after) if retry_after and retry_after.isdigit() else backoff
+            print(f"Vimeo list rate-limited ({r.status_code}). Retry in {wait}s...")
+            time.sleep(wait)
+            backoff *= 2
+            continue
+        r.raise_for_status()
+        items = r.json().get("data", [])
+        break
+    else:
+        r.raise_for_status()
+
     if not items:
         return False
 
     uri = items[0]["uri"]
+    print(f"Lösche ältestes Video: {uri}")
     resp = requests.delete(f"{BASE_URL}{uri}", headers=HEADERS, timeout=30)
     if resp.status_code >= 400:
         try:
@@ -44,10 +68,12 @@ def _delete_oldest_video() -> bool:
 
 def _ensure_space_for(file_path: str):
     need = os.path.getsize(file_path)
-    while _get_free_bytes() < need:
+    guard = 10  # verhindert Endlosschleifen
+    while _get_free_bytes() < need and guard > 0:
         deleted = _delete_oldest_video()
         if not deleted:
             raise RuntimeError("Nicht genug Speicher: keine Videos mehr zum Löschen vorhanden.")
+        guard -= 1
 
 
 def create_upload_session(
@@ -114,20 +140,23 @@ def upload_video(file_path, upload_link):
             r.raise_for_status()
 
 
-def get_review_link(video_uri):
+def get_review_link(video_uri, retries: int = 3, backoff: int = 10):
     url = f"{BASE_URL}{video_uri}"
-    r = requests.get(url, headers=HEADERS)
-    if r.status_code >= 400:
-        try:
-            print("Vimeo get error:", r.status_code, r.json())
-        except Exception:
-            print("Vimeo get error:", r.status_code, r.text)
+    for attempt in range(retries):
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
+            retry_after = r.headers.get("Retry-After")
+            wait = int(retry_after) if retry_after and retry_after.isdigit() else backoff
+            print(f"Vimeo link rate-limited ({r.status_code}). Retry in {wait}s...")
+            time.sleep(wait)
+            backoff *= 2
+            continue
         r.raise_for_status()
-    data = r.json()
-    # Prefer review page if available, else normal link
-    if isinstance(data.get("review_page"), dict) and data["review_page"].get("active") and data["review_page"].get("link"):
-        return data["review_page"]["link"]
-    return data.get("link")
+        data = r.json()
+        if isinstance(data.get("review_page"), dict) and data["review_page"].get("active") and data["review_page"].get("link"):
+            return data["review_page"]["link"]
+        return data.get("link")
+    r.raise_for_status()
 
 
 def upload(video_path):

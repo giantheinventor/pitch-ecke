@@ -4,12 +4,15 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import os
+from pathlib import Path
 
-QR_CODE_TIMER = 30
+QR_CODE_TIMER = 60
+TITLE = "Engine"
 
 def _ui_loop(q: Queue):
     root = tk.Tk()
     root.title("Recorder Status")
+    remaining = 0
 
     # Styles
     root.attributes("-fullscreen", True)
@@ -31,14 +34,14 @@ def _ui_loop(q: Queue):
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     scale = max(1.0, min(sw / 1920.0, sh / 1080.0)) 
     SZ = {
-        "PAD": int(16 * scale),
-        "TITLE": max(24, int(40 * scale)),
-        "STATUS": max(18, int(28 * scale)),
-        "DOT": max(18, int(28 * scale)),
-        "PB_LEN": int(sw * 0.5),
-        "QR": int(min(sw, sh) * 0.45),
-        "LINK": max(14, int(18 * scale)),
-        "SUB": max(12, int(16 * scale)),
+        "PAD": int(24 * scale),                 # mehr Luft
+        "TITLE": max(32, int(64 * scale)),      # Logo-Fallback/Countdown groß
+        "STATUS": max(24, int(42 * scale)),     # Status-Text deutlich größer
+        "DOT": max(24, int(36 * scale)),        # Status-Punkt größer
+        "PB_LEN": int(sw * 0.65),               # längere Progressbar
+        "QR": int(min(sw, sh) * 0.45),          # größerer QR (≈ 55% der kleineren Kante)
+        "LINK": max(18, int(24 * scale)),       # größerer Link-Text
+        "SUB": max(16, int(20 * scale)),        # Sub-/Hinweistext größer
     }
     # Progressbar
     style = ttk.Style()
@@ -46,11 +49,11 @@ def _ui_loop(q: Queue):
         style.theme_use("clam") 
     except Exception:
         pass
-    SZ["PB_THICK"] = max(12, int(20 * scale))
+    SZ["PB_THICK"] = max(18, int(28 * scale))
     style.configure(
         "MU.Horizontal.TProgressbar",
-        troughcolor="#1a1a1a",
-        bordercolor="#1a1a1a",
+        troughcolor="#080808",
+        bordercolor="#080808",
         background="#5FB3F3",
         lightcolor="#5FB3F3",
         darkcolor="#5FB3F3",
@@ -59,8 +62,33 @@ def _ui_loop(q: Queue):
         relief="flat",
     )
 
-    title = tk.Label(root, text="PITCH", fg="#FFFFFF", bg="#111111", font=("Helvetica", SZ["TITLE"] * 2, "bold"))
-    title.pack(pady=(SZ["PAD"] * 2, SZ["PAD"]))
+    # Logo instead of text title
+    logo_label = tk.Label(root, bg="#111111")
+    logo_label.pack(pady=(SZ["PAD"] * 2, SZ["PAD"]))
+
+    
+    base_dir = Path(__file__).resolve().parent
+    assets_dir = (base_dir / ".." / "assets").resolve()
+    logo_path = assets_dir / "Engine-logo.png"
+
+    logo_img_ref = {"img": None}
+    if logo_path.exists():
+        try:
+            im = Image.open(str(logo_path))
+            # Scale logo to ~30% of screen width
+            target_w = int(sw * 0.45)
+            w, h = im.size
+            if w > 0:
+                scale_factor = target_w / float(w)
+                new_w = int(w * scale_factor)
+                new_h = int(h * scale_factor)
+                im = im.resize((new_w, new_h))
+            logo_img_ref["img"] = ImageTk.PhotoImage(im)
+            logo_label.config(image=logo_img_ref["img"])
+        except Exception:
+            logo_label.config(text=TITLE, fg="#FFFFFF", bg="#111111", font=("Helvetica", SZ["TITLE"] * 2, "bold"))
+    else:
+        logo_label.config(text=TITLE, fg="#FFFFFF", bg="#111111", font=("Helvetica", SZ["TITLE"] * 2, "bold"))
 
     # Status row (dot + text)
     status_frame = tk.Frame(root, bg="#111111")
@@ -68,15 +96,16 @@ def _ui_loop(q: Queue):
 
     dot = tk.Canvas(status_frame, width=SZ["DOT"] + 6, height=SZ["DOT"] + 6, bg="#111111", highlightthickness=0)
     dot.pack(side="left")
-    dot_id = dot.create_oval(3, 3, SZ["DOT"] + 3, SZ["DOT"] + 3, fill="#666666", outline="")
+    dot_id = dot.create_oval(3, 3, SZ["DOT"] + 3, SZ["DOT"] + 3, fill="#34A853", outline="")
+    dot.pack_forget()
 
-    status_text = tk.Label(status_frame, text="Bereit", fg="#CCCCCC", bg="#111111", font=("Helvetica", SZ["STATUS"]))
-    status_text.pack(side="left", padx=SZ["PAD"])
+    status_text = tk.Label(status_frame, text="Press button to record...", fg="#595959", bg="#111111", font=("Helvetica", SZ["TITLE"]))
+    status_text.pack(side="right", pady=(SZ["PAD"] * 5, SZ["PAD"]))
 
     # Upload status
     upload_var = tk.StringVar(value="")
-    upload_lbl = tk.Label(root, fg="#AAAAAA", bg="#111111", font=("Helvetica", SZ["SUB"]))
-    upload_lbl.pack(pady=SZ["PAD"] // 2)
+    upload_lbl = tk.Label(root, textvariable=upload_var, fg="#AAAAAA", bg="#111111", font=("Helvetica", SZ["SUB"]))
+    upload_lbl.pack(pady=(SZ["PAD"] , SZ["PAD"] // 3))
 
     # Progress (indeterminate)
     pb = ttk.Progressbar(root, mode="indeterminate", length=SZ["PB_LEN"], style="MU.Horizontal.TProgressbar")
@@ -86,11 +115,8 @@ def _ui_loop(q: Queue):
 
     # QR image + link
     qr_label = tk.Label(root, bg="#111111")
-    qr_label.pack(pady=SZ["PAD"])
-    link_var = tk.StringVar(value="")
-    link_lbl = tk.Label(root, textvariable=link_var, fg="#5FB3F3", bg="#111111", font=("Helvetica", SZ["LINK"]), cursor="hand2")
-    link_lbl.pack()
-    link_lbl.bind("<Button-1>", lambda e: root.clipboard_clear() or root.clipboard_append(link_var.get()))
+    qr_label.pack(pady=(int(SZ["PAD"] * 0.1), int(SZ["PAD"] * 0.4)))
+
 
     qr_img_ref = {"img": None} 
 
@@ -101,7 +127,7 @@ def _ui_loop(q: Queue):
         textvariable=countdown_var,
         fg="#FFFFFF",
         bg="#111111",
-        font=("Helvetica", SZ["TITLE"] * 2, "bold"),
+        font=("Helvetica", max(SZ["TITLE"], int(SZ["TITLE"] * 1.2)), "bold"),
     )
     countdown_lbl.pack(pady=SZ["PAD"])
     countdown_lbl.pack_forget()    
@@ -110,32 +136,39 @@ def _ui_loop(q: Queue):
 
         set_uploading(False)
         set_status("idle")
+        show_qr(qr_path, link)
 
+        nonlocal remaining
         remaining = max(0, int(seconds))
 
         def tick():
             nonlocal remaining
             if remaining > 0:
                 countdown_lbl.pack(pady=SZ["PAD"])
-                countdown_var.set(remaining)
+                countdown_var.set(f"Active in {remaining}...")
                 remaining -= 1
                 root.after(1000, tick)
             else:
                 countdown_lbl.pack_forget()
-                show_qr(qr_path, link)
 
         tick()
     
     def set_status(state: str):
         if state == "recording":
-            dot.itemconfig(dot_id, fill="#EA4335")
-            status_text.config(text="● Recording…", fg="#EA4335")
+            dot.itemconfig(dot_id, fill="#FD5F31")
+            dot.pack(side="left")
+            status_text.config(text="Recording…", fg="#FD5F31")
         elif state == "uploading":
-            dot.itemconfig(dot_id, fill="#FFD700")
-            status_text.config(text="● Uploading…", fg="#FFD700")
+            dot.itemconfig(dot_id, fill="#F9A0B4")
+            status_text.config(text="Uploading…", fg="#F9A0B4")
+        elif state == "hide":
+            status_frame.pack_forget()
+            return
         else:
-            dot.itemconfig(dot_id, fill="#34A853")
-            status_text.config(text="Idle", fg="#34A853")
+            status_text.config(text="Press button ● to record...", fg="#9c9c9c")
+            dot.pack_forget()
+        
+        status_frame.pack(pady=SZ["PAD"])
 
     def set_uploading(on: bool):
         if on:
@@ -156,7 +189,18 @@ def _ui_loop(q: Queue):
                 qr_label.config(image="", text="QR konnte nicht geladen werden", fg="#CCCCCC")
         else:
             qr_label.config(image="", text="", fg="#CCCCCC")
-        link_var.set(link or "")
+
+    def clear_to_idle():
+        # QR & Link verstecken
+        qr_label.config(image="", text="", fg="#CCCCCC")
+        nonlocal remaining 
+        remaining = 0
+        try:
+            countdown_lbl.pack_forget()
+        except Exception:
+            pass
+        set_uploading(False)
+        set_status("idle")
 
     def poll_queue():
         try:
@@ -171,10 +215,10 @@ def _ui_loop(q: Queue):
                     set_uploading(bool(evt.get("on")))
                     set_status("uploading" if evt.get("on") else "idle")   
                 elif etype == "countdown":
-                    start_countdown(QR_CODE_TIMER, evt.get("qr_path"), evt.get("link")) 
-                elif etype == "uploaded":
-                    set_uploading(False)
-                    show_qr(evt.get("qr_path"), evt.get("link"))
+                    start_countdown(QR_CODE_TIMER, evt.get("qr_path"), evt.get("link"))
+                    set_status("hide")
+                elif etype == "reset":
+                    clear_to_idle()
                 elif etype == "message":
                     upload_var.set(str(evt.get("text", "")))
         except Exception:
